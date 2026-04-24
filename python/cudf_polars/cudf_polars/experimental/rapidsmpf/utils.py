@@ -40,7 +40,7 @@ from cudf_polars.dsl.tracing import Scope
 from cudf_polars.experimental.utils import _concat
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+    from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Iterator
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -206,7 +206,7 @@ def _remap_scheme_simple(
         old_keys = indices_to_names(scheme.column_indices, child.schema)
         try:
             new_indices = names_to_indices(old_keys, ir.schema)
-        except (ValueError, IndexError):
+        except (ValueError, KeyError):
             return None  # Column missing in child or output schema
         return HashScheme(new_indices, scheme.modulus)
     return scheme  # None or "inherit" passes through unchanged
@@ -567,7 +567,7 @@ async def chunkwise_evaluate(
     await ch_out.drain(context)
 
 
-def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...]:
+def indices_to_names(indices: Iterable[int], schema: Schema) -> tuple[str, ...]:
     """
     Return column names for the given column indices in schema order.
 
@@ -587,7 +587,7 @@ def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...
 
 
 def names_to_indices(
-    names: tuple[str | NamedExpr, ...], schema: Schema
+    names: Iterable[str | NamedExpr], schema: Schema
 ) -> tuple[int, ...]:
     """
     Return column indices for the given names in schema order.
@@ -606,9 +606,10 @@ def names_to_indices(
     -------
     The column indices for each name in schema order.
     """
-    keys = list(schema.keys())
-    str_names = [n.name if isinstance(n, NamedExpr) else n for n in names]
-    return tuple(keys.index(n) for n in str_names)
+    keys = {name: i for i, name in enumerate(schema.keys())}
+    return tuple(
+        keys[n] for n in (n.name if isinstance(n, NamedExpr) else n for n in names)
+    )
 
 
 async def replay_buffered_channel(
