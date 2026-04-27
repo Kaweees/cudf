@@ -151,13 +151,14 @@ class IRExecutionContext:
         result_stream = get_joined_cuda_stream(
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
         )
-
-        yield result_stream
-
-        # ensure that the inputs are downstream of result_stream (so that deallocation happens after the result is ready)
-        join_cuda_streams(
-            downstreams=[df.stream for df in dfs], upstreams=[result_stream]
-        )
+        try:
+            yield result_stream
+        finally:
+            # ensure that the inputs are downstream of result_stream (so
+            # that deallocation happens after the result is ready)
+            join_cuda_streams(
+                downstreams=[df.stream for df in dfs], upstreams=[result_stream]
+            )
 
 
 _BINOPS = {
